@@ -1,8 +1,10 @@
+# Python
+from decimal import Decimal
 # Django
 from django.db import models
 from django.utils.translation import gettext_lazy
-# Python
-from decimal import Decimal
+from django.dispatch import receiver
+from django.db.models.signals import post_save
 
 # Create your models here.
 
@@ -38,6 +40,26 @@ class Product(models.Model):
     @property
     def name(self):
         return f'{self.category.name} {self.brand.name} {self.description} {self.presentation}'
+
+    @property
+    def stock(self):
+        try:
+            lots = Lot.objects.filter(product=self).all()
+            stock = 0
+            for lot in lots:
+                stock += lot.quantity
+        except Lot.DoesNotExist:
+            stock = 0
+        return stock
+
+    @property
+    def investment(self):
+        lots = Lot.objects.filter(product=self).all()
+        amount_invested = 0
+        for lot in lots:
+            amount_invested_per_lot = lot.quantity * lot.unit_purchase_price
+            amount_invested += amount_invested_per_lot
+        return amount_invested
 
 
 class SellingPrice(models.Model):
@@ -125,3 +147,66 @@ class Scan(models.Model):
 
     def __str__(self):
         return self.barcode
+
+# TODO: Replace console prints with messages
+
+@receiver(post_save, sender=Scan)
+def create_sale(sender, instance, created, **kwargs):
+    scan = instance
+    barcode = scan.barcode
+
+    if Product.objects.filter(barcode=barcode).exists():
+        product = Product.objects.filter(barcode=barcode).get()
+        if Lot.objects.filter(product=product).exists():
+            earliest_lot = Lot.objects.filter(product=product).earliest()
+            lots_of_product = Lot.objects.filter(product=product).all()
+            product_stock = 0
+            for lot in lots_of_product:
+                product_stock += lot.quantity
+            if SellingPrice.objects.filter(product=product).exists():
+
+                if product_stock >= 0:
+                    if Sale.objects.filter(sold=False).exists():
+                        sale = Sale.objects.filter(sold=False).get()
+                        if SaleProduct.objects.filter(product=product, sold=False).exists():
+                            sale_product = SaleProduct.objects.filter(product__barcode=product.barcode, sold=False).get()
+                            if sale_product.quantity >= product_stock:
+                                print("There are no products in stock.")
+                            else:
+                                sale_product.quantity += 1
+                                sale_product.save()
+                                print('The product quantity has been updated!')
+                        else:
+                            if SellingPrice.objects.filter(product=product).exists():
+                                selling_price = SellingPrice.objects.filter(product=product).get()
+                                sale_product = SaleProduct.objects.create(
+                                    product=product,
+                                    unit_purchase_price=earliest_lot.unit_purchase_price,
+                                    unit_selling_price=selling_price.unit_price
+                                )
+                                sale.products.add(sale_product)
+                                print('Product added!')
+                            else:
+                                print('The product does not have a selling price.')
+                    else:
+                        if SellingPrice.objects.filter(product=product).exists():
+                            selling_price = SellingPrice.objects.filter(product=product).get()
+                            sale_product = SaleProduct.objects.create(
+                                product=product,
+                                unit_purchase_price=earliest_lot.unit_purchase_price,
+                                unit_selling_price=selling_price.unit_price
+                            )
+                            sale = Sale.objects.create()
+                            sale.products.add(sale_product)
+                            print('Product added!')
+                        else:
+                            print('The product does not have a selling price.')
+                else:
+                    print("This product is out of stock.")
+                
+            else:
+                print("The product does not have a selling price.")
+        else:
+            print("This product is out of stock.")
+    else:
+        print("This product doesn't exist.")

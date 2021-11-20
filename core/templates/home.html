@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <form action="{% url 'core:home' %}" method="POST">
+        {% csrf_token %}
+        <div class="input-group mb-3">
+            {{ form.barcode }}
+            <!--<input type="text" class="form-control" placeholder="Recipient's username" aria-label="Recipient's username" aria-describedby="button-addon2">-->
+            <button class="btn btn-outline-secondary" type="submit" id="button-addon2">Agragar</button>
+        </div>
+    </form>
+    {% if sale %}
+    <h1>Venta</h1>
+    <ul class="list-group">
+        <li class="list-group-item active">
+            <div class="row">
+                <div class="col-6">Producto</div>
+                <div class="col-3">Cantidad</div>
+                <div class="col-3">Precio</div>
+            </div>
+        </li>
+        {% for sale_product in sale.products.all %}
+        <li class="list-group-item">
+            <div class="row">
+                <div class="col-6">
+                    {{ sale_product.product.name }}
+                </div>
+                <div class="col-3">
+                    <a class="" href="{% url 'core:remove_one_product_from_sale' sale_product.product.pk %}"><i class="fas fa-minus-circle"></i></a>
+                    {{ sale_product.quantity }}
+                    <a class="" href="{% url 'core:add_one_product_to_sale' sale_product.product.pk %}"><i class="fas fa-plus-circle"></i></a>
+                </div>
+                <div class="col-3">${{ sale_product.accumulated_price }}</div>
+            </div>
+        </li>
+        {% endfor %}
+        <li class="list-group-item">
+            <div class="row">
+                <div class="col-9">
+                    <h4>Total:</h4>
+                </div>
+                <div class="col-3">
+                    ${{ sale.total_price }}
+                </div>
+            </div>
+        </li>
+    </ul>
+    <div class="row mt-3">
+        <a href="{% url 'core:finish_sale' sale.pk %}" class="btn btn-success btn-block">Finalizar Venta</a>
+    </div>
+    {% else %}
+    <h1>No hay ventas activas.</h1>
+    {% endif %}
+{% endblock content %}
